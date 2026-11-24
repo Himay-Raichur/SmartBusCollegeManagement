@@ -8,7 +8,7 @@ import { errMsg, fmtDateTime, fmtDate } from "../../utils/format.js";
 
 const STYLE = {
   valid: "border-emerald-500 bg-emerald-50 text-emerald-800",
-  error: "border-slate-400 bg-slate-50 text-slate-700",
+  error: "border-red-500 bg-red-50 text-red-800",
 };
 
 export default function Scanner() {
