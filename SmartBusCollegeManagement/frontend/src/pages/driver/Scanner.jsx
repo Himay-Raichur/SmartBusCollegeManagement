@@ -36,85 +36,92 @@ const playSound = (type) => {
 
     const isValid = type === "valid";
 
-    const pattern = isValid
+    const tones = isValid
       ? [
-          { frequency: 880, duration: 0.28 },
-          { frequency: 1100, duration: 0.32 },
+          { freq: 1000, duration: 0.18 },
+          { freq: 1400, duration: 0.22 },
         ]
       : [
-          { frequency: 350, duration: 0.25 },
-          { frequency: 260, duration: 0.25 },
-          { frequency: 350, duration: 0.30 },
+          { freq: 400, duration: 0.30 },
+          { freq: 300, duration: 0.30 },
+          { freq: 200, duration: 0.40 },
         ];
 
-    let startTime = ctx.currentTime;
+    let time = ctx.currentTime;
 
-    pattern.forEach((tone) => {
+    tones.forEach((tone) => {
       const oscillator = ctx.createOscillator();
       const gain = ctx.createGain();
 
       oscillator.type = isValid ? "sine" : "square";
-      oscillator.frequency.value = tone.frequency;
+      oscillator.frequency.setValueAtTime(tone.freq, time);
 
       oscillator.connect(gain);
       gain.connect(ctx.destination);
 
-      // Louder volume
-      gain.gain.setValueAtTime(0.6, startTime);
-      gain.gain.setValueAtTime(0.6, startTime + tone.duration - 0.05);
+      gain.gain.setValueAtTime(0.7, time);
+      gain.gain.setValueAtTime(0.7, time + tone.duration - 0.04);
       gain.gain.exponentialRampToValueAtTime(
-        0.01,
-        startTime + tone.duration
+        0.001,
+        time + tone.duration
       );
 
-      oscillator.start(startTime);
-      oscillator.stop(startTime + tone.duration);
+      oscillator.start(time);
+      oscillator.stop(time + tone.duration);
 
-      startTime += tone.duration + 0.12;
+      time += tone.duration + 0.10;
     });
   } catch {
-    /* sound unavailable */
+    // Sound unavailable
   }
 };
 
-  const submit = async (token) => {
-    setFrameStatus("");
+const submit = async (token) => {
+  if (!token) return;
 
-    try {
-      const { data } = await api.post("/validations/scan", {
-        qrToken: token,
-      });
+  setResult(null);
+  setFrameStatus("");
 
-      setResult(data);
+  try {
+    const { data } = await api.post("/validations/scan", {
+      qrToken: token,
+    });
 
-      const status = data.result === "valid" ? "valid" : "error";
-      setFrameStatus(status);
-      playSound(status);
-    } catch (e) {
-      setResult({ result: "error", message: errMsg(e) });
-      setFrameStatus("error");
-      playSound("error");
-    }
+    setResult(data);
 
+    const status = data.result === "valid" ? "valid" : "error";
+
+    setFrameStatus(status);
+    playSound(status);
+  } catch (e) {
+    const message = errMsg(e);
+
+    setResult({
+      result: "error",
+      message,
+    });
+
+    setFrameStatus("error");
+    playSound("error");
+  } finally {
     recent.reload();
-  };
+  }
+};
 
-  const onDecode = async (text) => {
-    const now = Date.now();
+const onDecode = async (decodedText) => {
+  if (busy.current) return;
 
-    if (
-      busy.current ||
-      (text === last.current.text && now - last.current.at < 4000)
-    )
-      return;
+  if (last.current === decodedText) return;
 
-    busy.current = true;
-    last.current = { text, at: now };
+  busy.current = true;
+  last.current = decodedText;
 
-    await submit(text);
-
+  try {
+    await submit(decodedText);
+  } finally {
     busy.current = false;
-  };
+  }
+};
 
   const stop = async () => {
     const s = scanner.current;
