@@ -29,37 +29,53 @@ export default function Scanner() {
   const audioRef = useRef(null);
 
   // Sound feedback for valid and invalid QR codes
-  const playSound = (type) => {
-    try {
-      const ctx = audioRef.current;
-      if (!ctx || ctx.state !== "running") return;
+const playSound = (type) => {
+  try {
+    const ctx = audioRef.current;
+    if (!ctx || ctx.state !== "running") return;
 
+    const isValid = type === "valid";
+
+    const pattern = isValid
+      ? [
+          { frequency: 880, duration: 0.28 },
+          { frequency: 1100, duration: 0.32 },
+        ]
+      : [
+          { frequency: 350, duration: 0.25 },
+          { frequency: 260, duration: 0.25 },
+          { frequency: 350, duration: 0.30 },
+        ];
+
+    let startTime = ctx.currentTime;
+
+    pattern.forEach((tone) => {
       const oscillator = ctx.createOscillator();
       const gain = ctx.createGain();
+
+      oscillator.type = isValid ? "sine" : "square";
+      oscillator.frequency.value = tone.frequency;
 
       oscillator.connect(gain);
       gain.connect(ctx.destination);
 
-      if (type === "valid") {
-        oscillator.frequency.value = 880;
-        oscillator.type = "sine";
-      } else {
-        oscillator.frequency.value = 220;
-        oscillator.type = "square";
-      }
-
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      // Louder volume
+      gain.gain.setValueAtTime(0.6, startTime);
+      gain.gain.setValueAtTime(0.6, startTime + tone.duration - 0.05);
       gain.gain.exponentialRampToValueAtTime(
         0.01,
-        ctx.currentTime + 0.25
+        startTime + tone.duration
       );
 
-      oscillator.start();
-      oscillator.stop(ctx.currentTime + 0.25);
-    } catch {
-      /* sound unavailable */
-    }
-  };
+      oscillator.start(startTime);
+      oscillator.stop(startTime + tone.duration);
+
+      startTime += tone.duration + 0.12;
+    });
+  } catch {
+    /* sound unavailable */
+  }
+};
 
   const submit = async (token) => {
     setFrameStatus("");
