@@ -1,3 +1,4 @@
+
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Html5Qrcode } from "html5-qrcode";
@@ -20,10 +21,45 @@ export default function Scanner() {
   const [manual, setManual] = useState("");
   const [camError, setCamError] = useState(null);
   const [frameStatus, setFrameStatus] = useState("");
+  const [cameraMode, setCameraMode] = useState("environment");
 
   const scanner = useRef(null);
   const last = useRef({ text: "", at: 0 });
   const busy = useRef(false);
+  const audioRef = useRef(null);
+
+  // Sound feedback for valid and invalid QR codes
+  const playSound = (type) => {
+    try {
+      const ctx = audioRef.current;
+      if (!ctx || ctx.state !== "running") return;
+
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+
+      if (type === "valid") {
+        oscillator.frequency.value = 880;
+        oscillator.type = "sine";
+      } else {
+        oscillator.frequency.value = 220;
+        oscillator.type = "square";
+      }
+
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(
+        0.01,
+        ctx.currentTime + 0.25
+      );
+
+      oscillator.start();
+      oscillator.stop(ctx.currentTime + 0.25);
+    } catch {
+      /* sound unavailable */
+    }
+  };
 
   const submit = async (token) => {
     setFrameStatus("");
@@ -34,10 +70,14 @@ export default function Scanner() {
       });
 
       setResult(data);
-      setFrameStatus(data.result === "valid" ? "valid" : "error");
+
+      const status = data.result === "valid" ? "valid" : "error";
+      setFrameStatus(status);
+      playSound(status);
     } catch (e) {
       setResult({ result: "error", message: errMsg(e) });
       setFrameStatus("error");
+      playSound("error");
     }
 
     recent.reload();
@@ -66,7 +106,9 @@ export default function Scanner() {
 
     if (s) {
       try {
-        await s.stop();
+        if (s.isScanning) {
+          await s.stop();
+        }
         s.clear();
       } catch {
         /* already stopped */
@@ -76,17 +118,27 @@ export default function Scanner() {
     setScanning(false);
   };
 
-  const start = async () => {
+  const start = async (mode = cameraMode) => {
     setCamError(null);
     setFrameStatus("");
     setResult(null);
 
     try {
+      // Initialize audio after the user clicks Start camera
+      if (!audioRef.current) {
+        audioRef.current = new (window.AudioContext ||
+          window.webkitAudioContext)();
+      }
+
+      if (audioRef.current.state === "suspended") {
+        await audioRef.current.resume();
+      }
+
       const s = new Html5Qrcode("qr-reader");
       scanner.current = s;
 
       await s.start(
-        { facingMode: "environment" },
+        { facingMode: mode },
         { fps: 10, qrbox: { width: 240, height: 240 } },
         onDecode,
         () => {}
@@ -99,6 +151,15 @@ export default function Scanner() {
         `Could not start the camera: ${e?.message || e}. Camera access needs HTTPS or localhost and your permission.`
       );
     }
+  };
+
+  const switchCamera = async () => {
+    const nextMode =
+      cameraMode === "environment" ? "user" : "environment";
+
+    await stop();
+    setCameraMode(nextMode);
+    await start(nextMode);
   };
 
   useEffect(() => () => {
@@ -147,13 +208,21 @@ export default function Scanner() {
             <p className="mt-2 text-sm text-red-600">{camError}</p>
           )}
 
-          <div className="mt-3 flex justify-center">
+          <div className="mt-3 flex flex-wrap justify-center gap-2">
             {scanning ? (
-              <Button variant="outline" onClick={stop}>
-                Stop camera
-              </Button>
+              <>
+                <Button variant="outline" onClick={stop}>
+                  Stop camera
+                </Button>
+
+                <Button variant="outline" onClick={switchCamera}>
+                  {cameraMode === "environment"
+                    ? "Switch to front camera"
+                    : "Switch to back camera"}
+                </Button>
+              </>
             ) : (
-              <Button disabled={noTrip} onClick={start}>
+              <Button disabled={noTrip} onClick={() => start()}>
                 Start camera
               </Button>
             )}
