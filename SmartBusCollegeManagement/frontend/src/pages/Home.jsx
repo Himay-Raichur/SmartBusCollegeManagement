@@ -43,6 +43,7 @@ export default function Home() {
         <div className="mt-8 flex justify-center gap-3">
           <Link to="/register" className="rounded-lg bg-accent px-6 py-3 font-medium">Get started</Link>
           <Link to="/login" className="rounded-lg border border-white/40 px-6 py-3 font-medium">Login</Link>
+          <Link to="/login" className="rounded-lg border border-white/40 px-6 py-3 font-medium">SNIST</Link>
         </div>
       </header>
 
